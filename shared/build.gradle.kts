@@ -30,3 +30,31 @@ kotlin {
         implementation("org.jetbrains.kotlin:kotlin-stdlib")
     }
 }
+
+val packForXcode by tasks.creating(Sync::class) {
+    val targetDir = File(buildDir, "xcode-frameworks")
+
+    /// selecting the right configuration for the iOS
+    /// framework depending on the environment
+    /// variables set by Xcode build
+    val mode = System.getenv("CONFIGURATION") ?: "DEBUG"
+    val framework = kotlin.targets
+        .getByName<KotlinNativeTarget>("ios")
+        .binaries.getFramework(mode)
+    inputs.property("mode", mode)
+    dependsOn(framework.linkTask)
+
+    from({ framework.outputDirectory })
+    into(targetDir)
+
+    doLast {
+        val gradlew = File(targetDir, "gradlew")
+        gradlew.writeText("#!/bin/bash\n"
+                + "export 'JAVA_HOME=${System.getProperty("java.home")}'\n"
+                + "cd '${rootProject.rootDir}'\n"
+                + "./gradlew \$@\n")
+        gradlew.setExecutable(true)
+    }
+}
+
+tasks.getByName("build").dependsOn(packForXcode)
